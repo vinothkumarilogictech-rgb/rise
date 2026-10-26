@@ -10,7 +10,9 @@ import 'package:rise/shared/widgets/task_tile.dart';
 import 'package:rise/shared/widgets/mountain_hero_card.dart';
 import 'package:rise/models/task_model.dart';
 import 'package:rise/models/journey_model.dart';
+import 'package:rise/models/timetable_model.dart';
 import 'package:rise/core/network/api_client.dart';
+import 'package:rise/features/timetable/timetable_review_screen.dart';
 
 void main() {
   testWidgets('RISE App smoke test', (WidgetTester tester) async {
@@ -182,5 +184,62 @@ void main() {
     // Reset custom base URL
     ApiClient.setCustomBaseUrl(null);
   });
+
+  testWidgets('TimetableReviewScreen displays extracted sessions and handles selection', (WidgetTester tester) async {
+    final sampleResponse = TimetableExtractResponseModel(
+      filename: 'gate_2027_eee_timetable.png',
+      extractedTextPreview: 'GATE 2027 EEE Intensive Schedule Preview',
+      totalSessionsFound: 2,
+      sessions: [
+        TimetableSessionItemModel(
+          id: 'test_session_1',
+          date: '2026-10-27',
+          weekday: 'Tuesday',
+          startTime: '05:25 AM',
+          endTime: '06:45 AM',
+          subject: 'Network Theory',
+          topic: 'KCL, KVL and Nodal Analysis',
+          sessionType: 'study',
+          estimatedMinutes: 80,
+          priority: 'high',
+          isSelected: true,
+        ),
+        TimetableSessionItemModel(
+          id: 'test_session_2',
+          date: '2026-10-27',
+          weekday: 'Tuesday',
+          startTime: '07:00 AM',
+          endTime: '08:00 AM',
+          subject: 'Engineering Mathematics',
+          topic: 'Linear Algebra Eigenvalues',
+          sessionType: 'study',
+          estimatedMinutes: 60,
+          priority: 'medium',
+          isSelected: true,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => AppProvider()),
+          ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ],
+        child: MaterialApp(
+          home: TimetableReviewScreen(extractResponse: sampleResponse),
+        ),
+      ),
+    );
+
+    // Verify title and extracted cards
+    expect(find.text('Review Extracted Schedule'), findsOneWidget);
+    expect(find.text('Network Theory'), findsOneWidget);
+    expect(find.text('KCL, KVL and Nodal Analysis'), findsOneWidget);
+    expect(find.text('Engineering Mathematics'), findsOneWidget);
+    expect(find.text('05:25 AM - 06:45 AM'), findsOneWidget);
+    expect(find.text('Add Schedule to RISE (2 Tasks)'), findsOneWidget);
+  });
 }
+
 

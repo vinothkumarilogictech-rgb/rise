@@ -10,3 +10,9 @@ build/
 .venv/
 env/
 venv/
+
+# Firebase Service Account Credentials
+rise-firebase-adminsdk.json
+*firebase-adminsdk*.json
+*service-account*.json
+firebase-service-account.json

@@ -281,3 +281,140 @@ async def chat_with_coach(
         "is_fallback": True,
         "notice": "Unable to reach the AI service."
     }
+
+async def extract_timetable_from_text(raw_text: str) -> List[Dict[str, Any]]:
+    """
+    Parses OCR or PDF extracted timetable text into structured session items.
+    Uses Grok with a strict JSON prompt, and falls back to a deterministic regex parser.
+    """
+    if not raw_text or not raw_text.strip():
+        return []
+
+    prompt = f"""You are an expert academic schedule and timetable extraction engine.
+Parse the following raw text extracted from a study timetable (e.g., GATE 2027 EEE or college study plan).
+Extract EVERY study session, revision, practice block, PYQ session, mock test, break, and error analysis across all dates and weeks.
+
+Rules:
+1. Extract ALL sessions spanning multiple days or weeks. Do not omit sessions.
+2. For each session provide:
+   - "date": string in YYYY-MM-DD format. If only month/day or weekday is given, infer relative to current year (2026/2027).
+   - "weekday": full weekday name (e.g. "Monday", "Tuesday").
+   - "start_time": string formatted like "05:25 AM" or "16:00".
+   - "end_time": string formatted like "06:45 AM" or "17:30".
+   - "subject": subject title (e.g. "Network Theory", "Control Systems", "Electrical Machines").
+   - "topic": specific chapter or topic (e.g. "KCL, KVL and Nodal Analysis", "Nyquist Plot", "DC Motor Speed Control").
+   - "session_type": one of ("study", "pyq", "mock_test", "revision", "break", "analysis").
+   - "estimated_minutes": calculated or estimated integer duration in minutes (e.g. 80).
+   - "priority": ("high", "medium", "low"). Core concept and mock tests are "high", PYQs and revisions "medium", breaks "low".
+   - "notes": additional instructions like question target, formula review, or error logbook.
+3. Return STRICTLY a valid JSON array of objects. No markdown backticks, no explanations.
+
+RAW TIMETABLE TEXT:
+{raw_text[:6000]}
+"""
+
+    messages = [
+        {"role": "system", "content": "You are a timetable parser that outputs ONLY valid JSON array."},
+        {"role": "user", "content": prompt}
+    ]
+
+    response_text = await call_grok_api(messages, temperature=0.1)
+    if response_text:
+        try:
+            cleaned = response_text.strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.split("```")[1]
+                if cleaned.startswith("json"):
+                    cleaned = cleaned[4:]
+            cleaned = cleaned.strip()
+            sessions = json.loads(cleaned)
+            if isinstance(sessions, list) and len(sessions) > 0:
+                logger.info(f"Successfully parsed {len(sessions)} timetable sessions using Grok.")
+                return sessions
+        except Exception as e:
+            logger.warning(f"Failed to parse Grok timetable response: {e}")
+
+    # Deterministic fallback parser using regex heuristics
+    import re
+    from datetime import datetime, date
+
+    logger.info("Using deterministic timetable fallback parser.")
+    fallback_sessions = []
+    current_date = date.today().strftime("%Y-%m-%d")
+    current_weekday = date.today().strftime("%A")
+
+    lines = raw_text.splitlines()
+    for line in lines:
+        line_clean = line.strip()
+        if not line_clean:
+            continue
+
+        # Check for date line: e.g. "Date: 2026-10-27" or "2026-10-27 | Tuesday"
+        date_match = re.search(r"(\d{4}[-/]\d{1,2}[-/]\d{1,2})", line_clean)
+        if date_match:
+            try:
+                raw_d = date_match.group(1).replace("/", "-")
+                parsed_d = datetime.strptime(raw_d, "%Y-%m-%d").date()
+                current_date = parsed_d.strftime("%Y-%m-%d")
+                current_weekday = parsed_d.strftime("%A")
+            except Exception:
+                pass
+
+        weekday_match = re.search(r"\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b", line_clean, re.I)
+        if weekday_match:
+            current_weekday = weekday_match.group(1).capitalize()
+
+        # Check for time range pattern: e.g. "05:25 AM - 06:45 AM" or "05:25 - 06:45"
+        time_match = re.search(r"(\d{1,2}[:.]\d{2}(?:\s*[AaPp][Mm])?)\s*[-–to]+\s*(\d{1,2}[:.]\d{2}(?:\s*[AaPp][Mm])?)", line_clean)
+        if time_match:
+            start_t = time_match.group(1).strip().replace(".", ":")
+            end_t = time_match.group(2).strip().replace(".", ":")
+            remainder = line_clean[time_match.end():].strip().lstrip(":- ")
+            
+            # Extract subject and topic
+            subject = "General Study"
+            topic = remainder or "Study Session"
+            if "-" in remainder:
+                parts = remainder.split("-", 1)
+                subject = parts[0].strip()
+                topic = parts[1].strip()
+            elif ":" in remainder:
+                parts = remainder.split(":", 1)
+                subject = parts[0].strip()
+                topic = parts[1].strip()
+
+            lower_line = line_clean.lower()
+            if "pyq" in lower_line or "question" in lower_line or "practice" in lower_line:
+                stype = "pyq"
+                priority = "medium"
+            elif "mock" in lower_line or "test" in lower_line:
+                stype = "mock_test"
+                priority = "high"
+            elif "revision" in lower_line or "review" in lower_line:
+                stype = "revision"
+                priority = "medium"
+            elif "break" in lower_line or "rest" in lower_line:
+                stype = "break"
+                priority = "low"
+            elif "error" in lower_line or "analysis" in lower_line:
+                stype = "analysis"
+                priority = "medium"
+            else:
+                stype = "study"
+                priority = "high"
+
+            fallback_sessions.append({
+                "date": current_date,
+                "weekday": current_weekday,
+                "start_time": start_t,
+                "end_time": end_t,
+                "subject": subject,
+                "topic": topic,
+                "session_type": stype,
+                "estimated_minutes": 60,
+                "priority": priority,
+                "notes": line_clean
+            })
+
+    return fallback_sessions
+

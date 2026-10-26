@@ -77,6 +77,27 @@ class TaskTile extends StatelessWidget {
                     const SizedBox(height: 5),
                     Row(
                       children: [
+                        if (task.startTime != null && task.startTime!.isNotEmpty) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryBlue.withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.access_time, size: 10, color: AppColors.cyanHighlight),
+                                const SizedBox(width: 3),
+                                Text(
+                                  task.endTime != null ? '${task.startTime} - ${task.endTime}' : task.startTime!,
+                                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.cyanHighlight),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
                         // Category chip
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

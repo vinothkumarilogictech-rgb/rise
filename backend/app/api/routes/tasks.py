@@ -16,6 +16,8 @@ router = APIRouter(prefix="/tasks", tags=["Tasks"])
 def get_tasks(
     section: Optional[str] = None,
     due_date: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     is_completed: Optional[bool] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -25,10 +27,20 @@ def get_tasks(
         query = query.filter(Task.section == section)
     if due_date:
         query = query.filter(Task.due_date == due_date)
+    if start_date:
+        query = query.filter(Task.due_date >= start_date)
+    if end_date:
+        query = query.filter(Task.due_date <= end_date)
     if is_completed is not None:
         query = query.filter(Task.is_completed == is_completed)
     
-    tasks = query.order_by(Task.is_completed.asc(), Task.order_index.asc(), Task.created_at.desc()).all()
+    tasks = query.order_by(
+        Task.is_completed.asc(),
+        Task.due_date.asc(),
+        Task.start_time.asc(),
+        Task.order_index.asc(),
+        Task.created_at.desc()
+    ).all()
     return [TaskResponse.model_validate(t) for t in tasks]
 
 @router.post("", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
@@ -58,6 +70,11 @@ def create_task(
         estimated_minutes=req.estimated_minutes,
         xp_reward=server_xp,
         due_date=req.due_date,
+        start_time=req.start_time,
+        end_time=req.end_time,
+        weekday=req.weekday,
+        session_type=req.session_type or "study",
+        import_batch_id=req.import_batch_id,
         why_it_matters=req.why_it_matters,
         order_index=req.order_index
     )

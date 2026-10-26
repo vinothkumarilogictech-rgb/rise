@@ -10,6 +10,11 @@ class TaskModel {
   final int xpReward;
   bool isCompleted;
   final String? dueDate;
+  final String? startTime;
+  final String? endTime;
+  final String? weekday;
+  final String sessionType;
+  final String? importBatchId;
   final String? whyItMatters;
   final int orderIndex;
 
@@ -25,6 +30,11 @@ class TaskModel {
     this.xpReward = 10,
     this.isCompleted = false,
     this.dueDate,
+    this.startTime,
+    this.endTime,
+    this.weekday,
+    this.sessionType = 'study',
+    this.importBatchId,
     this.whyItMatters,
     this.orderIndex = 0,
   });
@@ -42,6 +52,11 @@ class TaskModel {
       xpReward: json['xp_reward'] ?? 10,
       isCompleted: json['is_completed'] ?? false,
       dueDate: json['due_date'],
+      startTime: json['start_time'],
+      endTime: json['end_time'],
+      weekday: json['weekday'],
+      sessionType: json['session_type'] ?? 'study',
+      importBatchId: json['import_batch_id'],
       whyItMatters: json['why_it_matters'],
       orderIndex: json['order_index'] ?? 0,
     );

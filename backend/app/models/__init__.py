@@ -1,5 +1,5 @@
 from app.core.database import Base
-from app.models.user import User, UserPreferences
+from app.models.user import User, UserPreferences, UserDeviceToken, StudyPlanRecommendation, ScheduledNotification
 from app.models.goal import Goal, GoalMilestone
 from app.models.task import Task, TaskCompletion
 from app.models.journey import XPTransaction, Achievement
@@ -10,6 +10,9 @@ __all__ = [
     "Base",
     "User",
     "UserPreferences",
+    "UserDeviceToken",
+    "StudyPlanRecommendation",
+    "ScheduledNotification",
     "Goal",
     "GoalMilestone",
     "Task",
@@ -19,3 +22,4 @@ __all__ = [
     "FocusSession",
     "JournalEntry",
 ]
+

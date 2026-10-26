@@ -15,7 +15,9 @@ from app.api.routes import (
     journal,
     analytics,
     preferences,
+    notifications,
 )
+from app.services.scheduler_service import start_scheduler, shutdown_scheduler
 
 # Initialize database tables safely
 try:
@@ -73,6 +75,22 @@ app.include_router(focus.router, prefix="/api")
 app.include_router(journal.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")
 app.include_router(preferences.router, prefix="/api")
+app.include_router(notifications.router, prefix="/api")
+
+@app.on_event("startup")
+def on_startup():
+    try:
+        start_scheduler()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Could not start background scheduler: {e}")
+
+@app.on_event("shutdown")
+def on_shutdown():
+    try:
+        shutdown_scheduler()
+    except Exception:
+        pass
 
 @app.get("/", tags=["System"])
 def root():

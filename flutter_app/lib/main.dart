@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'core/constants/colors.dart';
 import 'core/constants/theme.dart';
 import 'core/services/notification_service.dart';
+import 'core/network/api_client.dart';
 import 'providers/auth_provider.dart';
 import 'providers/app_provider.dart';
 import 'features/onboarding/welcome_screen.dart';
@@ -58,6 +59,7 @@ class _RootGatekeeperState extends State<RootGatekeeper> {
     await auth.initialize();
     if (auth.isAuthenticated) {
       await app.loadAllData();
+      await NotificationService().initFcm(apiClient: ApiClient());
     }
   }
 

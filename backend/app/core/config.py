@@ -15,12 +15,30 @@ class Settings(BaseSettings):
         "http://localhost:3000,http://127.0.0.1:3000,"
         "http://localhost:8080,http://127.0.0.1:8080"
     )
-    FCM_ENABLED: bool = False
+    FCM_ENABLED: bool = True
     FIREBASE_PROJECT_ID: Optional[str] = None
+    FIREBASE_SERVICE_ACCOUNT_PATH: Optional[str] = None
+    FIREBASE_CREDENTIALS_PATH: Optional[str] = None
+    FIREBASE_SERVICE_ACCOUNT_JSON: Optional[str] = None
 
     class Config:
         env_file = ".env"
         extra = "allow"
+
+    @property
+    def resolved_firebase_credentials_path(self) -> Optional[str]:
+        raw_path = self.FIREBASE_SERVICE_ACCOUNT_PATH or self.FIREBASE_CREDENTIALS_PATH
+        if not raw_path:
+            return None
+        if os.path.isabs(raw_path) and os.path.exists(raw_path):
+            return raw_path
+        if os.path.exists(raw_path):
+            return os.path.abspath(raw_path)
+        backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        candidate = os.path.join(backend_dir, raw_path)
+        if os.path.exists(candidate):
+            return candidate
+        return raw_path
 
     @property
     def grok_endpoint(self) -> str:

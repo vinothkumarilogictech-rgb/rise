@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../core/constants/colors.dart';
 import '../../providers/app_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../timetable/timetable_review_screen.dart';
 
 class AICoachScreen extends StatefulWidget {
   const AICoachScreen({super.key});
@@ -39,10 +41,63 @@ class _AICoachScreenState extends State<AICoachScreen> {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
     final app = Provider.of<AppProvider>(context, listen: false);
-    if (app.isAiReplying) return;
+    if (app.isAiReplying || app.isUploadingTimetable) return;
     _messageController.clear();
     app.sendAiMessage(trimmed);
     _scrollToBottom();
+  }
+
+  Future<void> _pickAndUploadTimetable() async {
+    final app = Provider.of<AppProvider>(context, listen: false);
+    if (app.isUploadingTimetable || app.isAiReplying) return;
+
+    try {
+      final file = await FilePicker.pickFile(
+        type: FileType.custom,
+        allowedExtensions: ['png', 'jpg', 'jpeg', 'pdf'],
+      );
+
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+
+      if (bytes.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not read the selected file data.')),
+        );
+        return;
+      }
+
+      if (bytes.length > 15 * 1024 * 1024) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('File exceeds 15MB limit. Please choose a smaller file.')),
+        );
+        return;
+      }
+
+      final extractRes = await app.uploadTimetableFile(
+        fileBytes: bytes,
+        filename: file.name,
+      );
+
+      if (!mounted) return;
+      final committed = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (ctx) => TimetableReviewScreen(extractResponse: extractRes),
+        ),
+      );
+
+      if (committed == true && mounted) {
+        app.sendAiMessage("I have scheduled my timetable from '${file.name}'. Please give me today's priority study focus.");
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(backgroundColor: Colors.red.shade700, content: Text('Timetable upload failed: $e')),
+      );
+    }
   }
 
   @override
@@ -121,6 +176,36 @@ class _AICoachScreenState extends State<AICoachScreen> {
               ),
             ],
 
+            if (app.isUploadingTimetable) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryBlue.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.primaryBlue.withOpacity(0.4)),
+                  ),
+                  child: const Row(
+                    children: [
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.cyanHighlight),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Extracting schedule from timetable with Grok AI...',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.cyanHighlight),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+
             // Starters horizontal scroll
             if (history.isEmpty) ...[
               SizedBox(
@@ -139,7 +224,7 @@ class _AICoachScreenState extends State<AICoachScreen> {
                         side: const BorderSide(color: AppColors.cardBorder),
                         labelStyle: const TextStyle(fontSize: 12, color: AppColors.cyanHighlight),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        onPressed: app.isAiReplying ? null : () => _sendMessage(starter),
+                        onPressed: (app.isAiReplying || app.isUploadingTimetable) ? null : () => _sendMessage(starter),
                       ),
                     );
                   },
@@ -157,6 +242,14 @@ class _AICoachScreenState extends State<AICoachScreen> {
               ),
               child: Row(
                 children: [
+                  IconButton(
+                    icon: const Icon(Icons.attach_file, color: AppColors.cyanHighlight),
+                    tooltip: 'Upload Timetable (Image or PDF)',
+                    onPressed: (app.isUploadingTimetable || app.isAiReplying)
+                        ? null
+                        : _pickAndUploadTimetable,
+                  ),
+                  const SizedBox(width: 4),
                   Expanded(
                     child: TextField(
                       controller: _messageController,
@@ -172,23 +265,23 @@ class _AICoachScreenState extends State<AICoachScreen> {
                           borderSide: BorderSide.none,
                         ),
                       ),
-                      onSubmitted: app.isAiReplying ? null : _sendMessage,
+                      onSubmitted: (app.isAiReplying || app.isUploadingTimetable) ? null : _sendMessage,
                     ),
                   ),
                   const SizedBox(width: 8),
                   Container(
                     decoration: BoxDecoration(
-                      gradient: app.isAiReplying ? null : AppColors.primaryGradient,
-                      color: app.isAiReplying ? AppColors.surface : null,
+                      gradient: (app.isAiReplying || app.isUploadingTimetable) ? null : AppColors.primaryGradient,
+                      color: (app.isAiReplying || app.isUploadingTimetable) ? AppColors.surface : null,
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
                       icon: Icon(
                         Icons.arrow_upward,
-                        color: app.isAiReplying ? AppColors.textMuted : Colors.white,
+                        color: (app.isAiReplying || app.isUploadingTimetable) ? AppColors.textMuted : Colors.white,
                         size: 20,
                       ),
-                      onPressed: app.isAiReplying ? null : () => _sendMessage(_messageController.text),
+                      onPressed: (app.isAiReplying || app.isUploadingTimetable) ? null : () => _sendMessage(_messageController.text),
                     ),
                   ),
                 ],

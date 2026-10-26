@@ -23,6 +23,11 @@ class Task(Base):
     is_completed = Column(Boolean, default=False)
     completed_at = Column(DateTime, nullable=True)
     due_date = Column(String(30), nullable=True, index=True)
+    start_time = Column(String(20), nullable=True)  # e.g., "05:25" or "05:25 AM"
+    end_time = Column(String(20), nullable=True)    # e.g., "06:45" or "06:45 AM"
+    weekday = Column(String(20), nullable=True)     # e.g., "Monday"
+    session_type = Column(String(50), default="study")  # study, pyq, mock_test, revision, break, analysis
+    import_batch_id = Column(String(36), nullable=True, index=True)
     why_it_matters = Column(Text, nullable=True)
     order_index = Column(Integer, default=0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

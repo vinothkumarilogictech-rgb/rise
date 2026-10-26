@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../core/constants/colors.dart';
+import '../../models/task_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/app_provider.dart';
 import '../../shared/widgets/mountain_hero_card.dart';
@@ -22,6 +23,34 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   String _selectedSection = 'All';
+  String _dateFilter = 'Today';
+  DateTime? _selectedCustomDate;
+
+  Future<void> _pickCustomDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedCustomDate ?? DateTime.now(),
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 730)),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppColors.primaryBlue,
+              surface: AppColors.elevatedCard,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedCustomDate = picked;
+        _dateFilter = 'Custom';
+      });
+    }
+  }
 
   String _getTimeGreeting() {
     final hour = DateTime.now().hour;
@@ -222,9 +251,25 @@ class _HomeScreenState extends State<HomeScreen> {
     final dateFormatted = DateFormat('EEEE, MMM d').format(now);
 
     final featured = app.featuredFocusTask;
+    List<TaskModel> baseDateTasks;
+    if (_dateFilter == 'Today') {
+      baseDateTasks = app.todayTasks;
+    } else if (_dateFilter == 'Tomorrow') {
+      baseDateTasks = app.tomorrowTasks;
+    } else if (_dateFilter == 'Upcoming') {
+      baseDateTasks = app.upcomingTasks;
+    } else if (_dateFilter == 'Completed') {
+      baseDateTasks = app.completedTasks;
+    } else if (_dateFilter == 'Custom' && _selectedCustomDate != null) {
+      final dateStr = DateFormat('yyyy-MM-dd').format(_selectedCustomDate!);
+      baseDateTasks = app.getTasksForDate(dateStr);
+    } else {
+      baseDateTasks = app.tasks;
+    }
+
     final filteredTasks = _selectedSection == 'All'
-        ? app.tasks
-        : app.tasks.where((t) => t.section == _selectedSection).toList();
+        ? baseDateTasks
+        : baseDateTasks.where((t) => t.section == _selectedSection).toList();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -294,28 +339,83 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 const SizedBox(height: 12),
 
-                // AI Daily Message Badge
+                // Grok AI Daily Study Recommendation Card
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    gradient: AppColors.cardGradient,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: AppColors.cardBorder),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.auto_awesome, color: AppColors.cyanHighlight, size: 16),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          app.journey.dailyMessage,
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(5),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryBlue.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(Icons.auto_awesome, color: AppColors.cyanHighlight, size: 16),
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'RISE AI Study Plan',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surface,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: AppColors.cardBorder),
+                                ),
+                                child: Text(
+                                  (app.dailyStudyPlan?.source == 'grok') ? 'GROK AI' : 'SCHEDULE',
+                                  style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: AppColors.cyanHighlight),
+                                ),
+                              ),
+                            ],
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.refresh, size: 16, color: AppColors.cyanHighlight),
+                            tooltip: 'Refresh AI Study Plan',
+                            onPressed: () => app.loadDailyStudyPlan(forceRefresh: true),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        app.dailyStudyPlan?.recommendationText ?? app.journey.dailyMessage,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textPrimary,
+                          height: 1.45,
+                        ),
+                      ),
+                      if (app.dailyStudyPlan?.reasoningSummary != null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          'Why: ${app.dailyStudyPlan!.reasoningSummary}',
                           style: const TextStyle(
-                            fontSize: 12,
+                            fontSize: 11,
                             fontStyle: FontStyle.italic,
                             color: AppColors.textSecondary,
                           ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
@@ -580,7 +680,55 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                // Date Filter Pills Row
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      ...['Today', 'Tomorrow', 'Upcoming', 'All', 'Completed'].map((filter) {
+                        final isSelected = _dateFilter == filter;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: ChoiceChip(
+                            label: Text(filter),
+                            selected: isSelected,
+                            selectedColor: AppColors.primaryBlue,
+                            backgroundColor: AppColors.surface,
+                            labelStyle: TextStyle(
+                              fontSize: 12,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              color: isSelected ? Colors.white : AppColors.textSecondary,
+                            ),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            onSelected: (_) => setState(() {
+                              _dateFilter = filter;
+                              _selectedCustomDate = null;
+                            }),
+                          ),
+                        );
+                      }),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8.0),
+                        child: ActionChip(
+                          avatar: const Icon(Icons.calendar_today, size: 14, color: AppColors.cyanHighlight),
+                          label: Text(
+                            _selectedCustomDate != null
+                                ? DateFormat('MMM d').format(_selectedCustomDate!)
+                                : 'Pick Date',
+                          ),
+                          backgroundColor: _dateFilter == 'Custom' ? AppColors.primaryBlue : AppColors.surface,
+                          labelStyle: TextStyle(
+                            fontSize: 12,
+                            color: _dateFilter == 'Custom' ? Colors.white : AppColors.textSecondary,
+                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          onPressed: _pickCustomDate,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
 
                 // Section Filter Pills
                 SingleChildScrollView(

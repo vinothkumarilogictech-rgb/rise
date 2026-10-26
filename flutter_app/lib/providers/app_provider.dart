@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../core/network/api_client.dart';
 import '../models/goal_model.dart';
 import '../models/task_model.dart';
@@ -6,6 +7,7 @@ import '../models/journey_model.dart';
 import '../models/focus_model.dart';
 import '../models/journal_model.dart';
 import '../models/analytics_model.dart';
+import '../models/timetable_model.dart';
 
 class AppProvider extends ChangeNotifier {
   final ApiClient _api = ApiClient();
@@ -21,6 +23,11 @@ class AppProvider extends ChangeNotifier {
   List<FocusSessionModel> _focusSessions = [];
   List<JournalEntryModel> _journalEntries = [];
   AnalyticsOverviewModel _analytics = AnalyticsOverviewModel();
+
+  // Study Plan and Timetable State
+  DailyStudyPlanModel? _dailyStudyPlan;
+  NotificationPreferencesModel _notificationPreferences = NotificationPreferencesModel();
+  bool _isUploadingTimetable = false;
 
   // AI Chat state
   final List<Map<String, String>> _aiChatHistory = [];
@@ -39,10 +46,36 @@ class AppProvider extends ChangeNotifier {
   List<Map<String, String>> get aiChatHistory => _aiChatHistory;
   bool get isAiReplying => _isAiReplying;
 
+  DailyStudyPlanModel? get dailyStudyPlan => _dailyStudyPlan;
+  NotificationPreferencesModel get notificationPreferences => _notificationPreferences;
+  bool get isUploadingTimetable => _isUploadingTimetable;
+
   // Filtered tasks
   List<TaskModel> get morningTasks => _tasks.where((t) => t.section == 'Morning Focus').toList();
   List<TaskModel> get priorityTasks => _tasks.where((t) => t.section == 'Main Priorities').toList();
   List<TaskModel> get eveningTasks => _tasks.where((t) => t.section == 'Evening Review').toList();
+
+  // Date-based task filters
+  List<TaskModel> getTasksForDate(String dateStr) {
+    return _tasks.where((t) => t.dueDate == dateStr).toList();
+  }
+
+  List<TaskModel> get todayTasks {
+    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    return _tasks.where((t) => t.dueDate == todayStr || t.dueDate == null).toList();
+  }
+
+  List<TaskModel> get tomorrowTasks {
+    final tomorrowStr = DateFormat('yyyy-MM-dd').format(DateTime.now().add(const Duration(days: 1)));
+    return _tasks.where((t) => t.dueDate == tomorrowStr).toList();
+  }
+
+  List<TaskModel> get upcomingTasks {
+    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    return _tasks.where((t) => !t.isCompleted && (t.dueDate == null || t.dueDate!.compareTo(todayStr) >= 0)).toList();
+  }
+
+  List<TaskModel> get completedTasks => _tasks.where((t) => t.isCompleted).toList();
 
   TaskModel? get featuredFocusTask {
     final uncompleted = _tasks.where((t) => !t.isCompleted).toList();
@@ -68,6 +101,8 @@ class AppProvider extends ChangeNotifier {
         _loadTasksInternal(),
         _loadAnalyticsInternal(),
         _loadJournalInternal(),
+        loadDailyStudyPlan(),
+        loadNotificationPreferences(),
       ]);
     } catch (e) {
       _errorMessage = e.toString();
@@ -359,4 +394,86 @@ class AppProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  // --- Timetable & Study Plan Operations ---
+  Future<void> loadDailyStudyPlan({bool forceRefresh = false}) async {
+    try {
+      final endpoint = forceRefresh ? '/ai/study-plan/generate' : '/ai/study-plan/today';
+      final res = forceRefresh ? await _api.post(endpoint) : await _api.get(endpoint);
+      if (res is Map<String, dynamic>) {
+        _dailyStudyPlan = DailyStudyPlanModel.fromJson(res);
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  Future<TimetableExtractResponseModel> uploadTimetableFile({
+    required List<int> fileBytes,
+    required String filename,
+  }) async {
+    _isUploadingTimetable = true;
+    notifyListeners();
+    try {
+      final res = await _api.postMultipart(
+        '/ai/timetable/upload',
+        fileBytes: fileBytes,
+        filename: filename,
+      );
+      return TimetableExtractResponseModel.fromJson(res);
+    } finally {
+      _isUploadingTimetable = false;
+      notifyListeners();
+    }
+  }
+
+  Future<Map<String, dynamic>> commitTimetableSessions(
+    List<TimetableSessionItemModel> sessions, {
+    bool skipDuplicates = true,
+    bool replaceUncompleted = false,
+  }) async {
+    final body = {
+      'sessions': sessions.map((s) => s.toJson()).toList(),
+      'skip_duplicates': skipDuplicates,
+      'replace_uncompleted': replaceUncompleted,
+    };
+    final res = await _api.post('/ai/timetable/commit', body: body);
+    await _loadTasksInternal();
+    await _loadAnalyticsInternal();
+    await loadDailyStudyPlan(forceRefresh: true);
+    notifyListeners();
+    return res is Map<String, dynamic> ? res : {};
+  }
+
+  // --- Notification Operations ---
+  Future<void> loadNotificationPreferences() async {
+    try {
+      final res = await _api.get('/notifications/preferences');
+      if (res is Map<String, dynamic>) {
+        _notificationPreferences = NotificationPreferencesModel.fromJson(res);
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> updateNotificationPreferences(Map<String, dynamic> data) async {
+    try {
+      final res = await _api.patch('/notifications/preferences', body: data);
+      if (res is Map<String, dynamic>) {
+        _notificationPreferences = NotificationPreferencesModel.fromJson(res);
+        notifyListeners();
+      }
+    } catch (_) {
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> sendTestPushNotification() async {
+    try {
+      final res = await _api.post('/notifications/test-push', body: {});
+      return res is Map<String, dynamic> ? res : {};
+    } catch (e) {
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
 }
+

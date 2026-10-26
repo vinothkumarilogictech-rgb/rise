@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Optional
 
 class DailyCompletionPoint(BaseModel):
     date: str  # YYYY-MM-DD
@@ -17,18 +17,39 @@ class GoalProgressPoint(BaseModel):
     total_tasks: int
     completed_tasks: int
 
+class SubjectProgressPoint(BaseModel):
+    subject: str
+    total_tasks: int
+    completed_tasks: int
+    completion_rate: float
+    total_minutes: int
+
+class MockTestSummary(BaseModel):
+    total_mock_tests: int
+    completed_mock_tests: int
+    total_pyq_sessions: int
+    completed_pyq_sessions: int
+
 class AnalyticsOverviewResponse(BaseModel):
     total_tasks_completed: int
+    total_all_tasks: int
     completion_rate_percentage: float
     current_streak: int
     best_streak: int
     total_focus_minutes: int
+    planned_study_minutes: int
+    recorded_study_minutes: int
+    timetable_adherence_rate: float
+    overdue_tasks_count: int
     total_xp: int
     journal_entries_count: int
     today_completed_tasks: int
     today_total_tasks: int
     weekly_trend: List[DailyCompletionPoint]
     goal_progress: List[GoalProgressPoint]
+    subject_breakdown: List[SubjectProgressPoint]
+    mock_tests: MockTestSummary
+    revision_recommendations: List[str]
 
 class WeeklyTrendResponse(BaseModel):
     days: List[DailyCompletionPoint]

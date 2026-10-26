@@ -39,3 +39,47 @@ class AIReviewProgressResponse(BaseModel):
     strengths: List[str]
     growth_opportunities: List[str]
     encouragement: str
+
+class TimetableSessionItem(BaseModel):
+    id: Optional[str] = None
+    date: str  # YYYY-MM-DD
+    weekday: Optional[str] = None
+    start_time: str
+    end_time: str
+    subject: str
+    topic: str
+    session_type: str = "study"  # study, pyq, mock_test, revision, break, analysis
+    estimated_minutes: int = 60
+    priority: str = "medium"  # high, medium, low
+    goal_id: Optional[str] = None
+    notes: Optional[str] = None
+    is_selected: bool = True
+
+class TimetableExtractResponse(BaseModel):
+    filename: str
+    extracted_text_preview: str
+    total_sessions_found: int
+    sessions: List[TimetableSessionItem]
+    source: str = "ai"
+
+class TimetableCommitRequest(BaseModel):
+    sessions: List[TimetableSessionItem]
+    replace_uncompleted: bool = False
+    skip_duplicates: bool = True
+
+class TimetableCommitResponse(BaseModel):
+    imported_count: int
+    skipped_count: int
+    replaced_count: int
+    batch_id: str
+    message: str
+
+class StudyPlanRecommendationResponse(BaseModel):
+    id: str
+    plan_date: str
+    recommendation_text: str
+    reasoning_summary: Optional[str] = None
+    task_references: Optional[List[str]] = None
+    source: str
+    created_at: str
+

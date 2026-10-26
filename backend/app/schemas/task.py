@@ -12,6 +12,11 @@ class TaskBase(BaseModel):
     estimated_minutes: int = 25
     xp_reward: int = 10
     due_date: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    weekday: Optional[str] = None
+    session_type: Optional[str] = "study"
+    import_batch_id: Optional[str] = None
     why_it_matters: Optional[str] = None
     order_index: int = 0
 
@@ -29,6 +34,11 @@ class TaskUpdate(BaseModel):
     xp_reward: Optional[int] = None
     is_completed: Optional[bool] = None
     due_date: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    weekday: Optional[str] = None
+    session_type: Optional[str] = None
+    import_batch_id: Optional[str] = None
     why_it_matters: Optional[str] = None
     order_index: Optional[int] = None
 

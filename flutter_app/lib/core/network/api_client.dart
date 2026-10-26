@@ -209,6 +209,45 @@ class ApiClient {
     }
   }
 
+  Future<dynamic> postMultipart(
+    String endpoint, {
+    required List<int> fileBytes,
+    required String filename,
+    String fieldName = 'file',
+    Map<String, String>? fields,
+  }) async {
+    final token = await getToken();
+    final uri = buildUri(endpoint);
+    try {
+      final request = http.MultipartRequest('POST', uri);
+      if (token != null && token.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+      request.headers['Accept'] = 'application/json';
+      if (fields != null) {
+        request.fields.addAll(fields);
+      }
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          fieldName,
+          fileBytes,
+          filename: filename,
+        ),
+      );
+
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 60));
+      final response = await http.Response.fromStream(streamedResponse);
+      return _processResponse(response);
+    } on SocketException {
+      throw ApiException('Cannot reach RISE server. Please verify backend is running.');
+    } on http.ClientException {
+      throw ApiException('Cannot connect to RISE backend at $baseUrl. Please verify the server is running.');
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      throw ApiException(e.toString());
+    }
+  }
+
   dynamic _processResponse(http.Response response) {
     if (response.statusCode == 204) {
       return null;
